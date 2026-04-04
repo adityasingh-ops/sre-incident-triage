@@ -1,0 +1,131 @@
+{
+  "services": [
+    {
+      "name": "api-gateway",
+      "description": "Main entry point, routes traffic to all downstream services",
+      "dependencies": ["auth-service", "product-service", "order-service"],
+      "metrics": ["request_rate", "error_rate", "latency_p99", "cpu_percent", "memory_mb"],
+      "failure_modes": ["high_latency", "error_spike", "cpu_exhaustion"]
+    },
+    {
+      "name": "auth-service",
+      "description": "Handles login, token validation, session management",
+      "dependencies": ["user-db"],
+      "metrics": ["request_rate", "error_rate", "latency_p99", "token_validation_ms", "cpu_percent"],
+      "failure_modes": ["db_connection_exhaustion", "memory_leak", "high_latency"]
+    },
+    {
+      "name": "order-service",
+      "description": "Manages order creation, status updates, payment triggers",
+      "dependencies": ["payments-service", "inventory-service", "order-db"],
+      "metrics": ["orders_per_minute", "error_rate", "latency_p99", "queue_depth", "cpu_percent"],
+      "failure_modes": ["db_connection_exhaustion", "queue_overflow", "bad_deploy"]
+    },
+    {
+      "name": "payments-service",
+      "description": "Processes payments, talks to external payment gateway",
+      "dependencies": ["payment-db", "fraud-service"],
+      "metrics": ["transactions_per_minute", "error_rate", "latency_p99", "timeout_rate", "memory_mb"],
+      "failure_modes": ["external_timeout", "memory_exhaustion", "bad_deploy"]
+    },
+    {
+      "name": "inventory-service",
+      "description": "Tracks stock levels, reserves items during checkout",
+      "dependencies": ["inventory-db"],
+      "metrics": ["request_rate", "error_rate", "latency_p99", "cache_hit_rate", "cpu_percent"],
+      "failure_modes": ["cache_failure", "db_connection_exhaustion", "high_latency"]
+    },
+    {
+      "name": "fraud-service",
+      "description": "ML-based fraud detection, called synchronously during payment",
+      "dependencies": [],
+      "metrics": ["request_rate", "error_rate", "latency_p99", "model_inference_ms", "cpu_percent"],
+      "failure_modes": ["cpu_exhaustion", "high_latency", "oom_kill"]
+    }
+  ],
+
+  "databases": [
+    {"name": "user-db",      "type": "postgres", "max_connections": 100},
+    {"name": "order-db",     "type": "postgres", "max_connections": 150},
+    {"name": "payment-db",   "type": "postgres", "max_connections": 80},
+    {"name": "inventory-db", "type": "mysql",    "max_connections": 120}
+  ],
+
+  "failure_templates": {
+    "db_connection_exhaustion": {
+      "root_cause": "db_connection_exhaustion",
+      "log_pattern": "ERROR: could not connect to database: too many clients already",
+      "metric_signature": {"error_rate": "high", "latency_p99": "high", "request_rate": "normal"},
+      "alert_name": "DatabaseConnectionPoolExhausted",
+      "remediation_playbook": "scale_db_connections",
+      "correct_rollback": false
+    },
+    "bad_deploy": {
+      "root_cause": "bad_deploy",
+      "log_pattern": "ERROR: NullPointerException at OrderController.java:142",
+      "metric_signature": {"error_rate": "very_high", "latency_p99": "normal", "request_rate": "dropping"},
+      "alert_name": "ErrorRateCritical",
+      "remediation_playbook": "drain_traffic",
+      "correct_rollback": true
+    },
+    "memory_exhaustion": {
+      "root_cause": "memory_exhaustion",
+      "log_pattern": "WARN: heap usage at 94%, GC overhead limit exceeded",
+      "metric_signature": {"memory_mb": "very_high", "latency_p99": "high", "error_rate": "medium"},
+      "alert_name": "MemoryUsageCritical",
+      "remediation_playbook": "restart_service",
+      "correct_rollback": false
+    },
+    "oom_kill": {
+      "root_cause": "oom_kill",
+      "log_pattern": "FATAL: process killed by OOM killer, last allocation failed",
+      "metric_signature": {"memory_mb": "spike_then_drop", "error_rate": "very_high", "request_rate": "zero"},
+      "alert_name": "ServiceDown",
+      "remediation_playbook": "restart_service",
+      "correct_rollback": false
+    },
+    "high_latency": {
+      "root_cause": "high_latency",
+      "log_pattern": "WARN: downstream call to dependency exceeded 5000ms timeout",
+      "metric_signature": {"latency_p99": "very_high", "error_rate": "medium", "request_rate": "dropping"},
+      "alert_name": "LatencyP99Critical",
+      "remediation_playbook": "enable_circuit_breaker",
+      "correct_rollback": false
+    },
+    "cpu_exhaustion": {
+      "root_cause": "cpu_exhaustion",
+      "log_pattern": "WARN: CPU throttling detected, request queue growing",
+      "metric_signature": {"cpu_percent": "very_high", "latency_p99": "high", "error_rate": "medium"},
+      "alert_name": "CPUUsageCritical",
+      "remediation_playbook": "scale_horizontal",
+      "correct_rollback": false
+    },
+    "cache_failure": {
+      "root_cause": "cache_failure",
+      "log_pattern": "ERROR: Redis connection refused, falling back to database",
+      "metric_signature": {"cache_hit_rate": "zero", "latency_p99": "very_high", "db_connections": "high"},
+      "alert_name": "CacheUnavailable",
+      "remediation_playbook": "restart_cache",
+      "correct_rollback": false
+    },
+    "external_timeout": {
+      "root_cause": "external_timeout",
+      "log_pattern": "ERROR: payment gateway timeout after 30000ms, circuit breaker open",
+      "metric_signature": {"timeout_rate": "very_high", "error_rate": "high", "latency_p99": "very_high"},
+      "alert_name": "PaymentGatewayTimeout",
+      "remediation_playbook": "switch_payment_provider",
+      "correct_rollback": false
+    }
+  },
+
+  "playbooks": {
+    "restart_service":          "Gracefully restart the service pods, waiting for health checks",
+    "scale_db_connections":     "Increase connection pool size and add read replicas",
+    "drain_traffic":            "Remove service from load balancer, drain existing connections",
+    "enable_circuit_breaker":   "Enable circuit breaker on downstream calls, return fallback responses",
+    "scale_horizontal":         "Add 3 additional pods to the service deployment",
+    "switch_payment_provider":  "Route payments through backup provider, disable primary",
+    "restart_cache":            "Flush and restart Redis cluster, warm up cache",
+    "rollback_deploy":          "Roll back to previous stable container image"
+  }
+}

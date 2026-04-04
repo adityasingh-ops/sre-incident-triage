@@ -1,0 +1,70 @@
+name: sre-incident-triage
+version: "1.0.0"
+description: >
+  A benchmark environment for training and evaluating AI agents on
+  production incident triage. Agents must investigate fake microservice
+  failures by querying logs, metrics, and alerts — then diagnose and remediate.
+
+author: "your-hf-username"
+license: MIT
+tags: [sre, devops, incident-response, production, microservices]
+
+server:
+  base_url: "http://localhost:8000"
+  health_endpoint: "/health"
+
+tasks:
+  - id: task1
+    name: "Single service failure"
+    difficulty: easy
+    max_steps: 6
+    reward_range: [0.0, 1.0]
+
+  - id: task2
+    name: "Cascading failure"
+    difficulty: medium
+    max_steps: 8
+    reward_range: [0.0, 1.0]
+
+  - id: task3
+    name: "Silent failure"
+    difficulty: hard
+    max_steps: 10
+    reward_range: [0.0, 1.0]
+
+  - id: task4
+    name: "Multi-service incident"
+    difficulty: expert
+    max_steps: 12
+    reward_range: [0.0, 1.0]
+
+action_space:
+  type: discrete
+  actions:
+    - query_logs
+    - get_metrics
+    - list_alerts
+    - run_playbook
+    - rollback
+    - escalate
+    - submit_diagnosis
+
+observation_space:
+  type: structured
+  fields:
+    - step
+    - task_id
+    - task_description
+    - available_actions
+    - logs
+    - metrics
+    - alerts
+    - playbook_result
+    - rollback_result
+    - last_action_feedback
+    - error
+
+endpoints:
+  reset: "POST /reset"
+  step:  "POST /step"
+  state: "GET /state"
