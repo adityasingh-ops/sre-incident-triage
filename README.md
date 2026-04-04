@@ -2,7 +2,7 @@
 title: SRE Incident Triage Environment
 emoji: 🚨
 colorFrom: red
-colorTo: orange
+colorTo: yellow
 sdk: docker
 pinned: true
 tags:
