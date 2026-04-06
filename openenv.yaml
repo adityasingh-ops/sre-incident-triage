@@ -5,7 +5,7 @@ description: >
   production incident triage. Agents must investigate fake microservice
   failures by querying logs, metrics, and alerts — then diagnose and remediate.
 
-author: "your-hf-username"
+author: "adityasingh-op"
 license: MIT
 tags: [sre, devops, incident-response, production, microservices]
 

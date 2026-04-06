@@ -110,6 +110,8 @@ class ResetResponse(BaseModel):
 # Stored after each completed episode for the /leaderboard endpoint.
 
 class LeaderboardEntry(BaseModel):
+    model_config = {"protected_namespaces": ()}  # Allow model_name field
+    
     model_name: str
     task_id: str
     seed: int

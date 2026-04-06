@@ -2,6 +2,7 @@ import random
 from datetime import datetime
 from typing import Optional, List, Dict
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from server.models import (
@@ -14,6 +15,15 @@ app = FastAPI(
     title="SRE Incident Triage Environment",
     description="OpenEnv-compliant benchmark for training AI agents on production incident response.",
     version="1.0.0",
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ── In-memory state ───────────────────────────────────────────────────────────

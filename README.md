@@ -3,7 +3,9 @@ title: SRE Incident Triage Environment
 emoji: 🚨
 colorFrom: red
 colorTo: yellow
-sdk: docker
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
 pinned: true
 tags:
   - openenv
@@ -17,6 +19,18 @@ tags:
 # SRE Incident Triage Environment
 
 > An OpenEnv-compliant benchmark for training and evaluating AI agents on **production incident response** — the most time-critical, high-stakes task in software engineering.
+
+## 🎮 Interactive UI
+
+This Space features a **production-grade Gradio interface** that lets you:
+
+- 🎯 **Play incidents manually** or watch AI agents solve them
+- 📊 **Real-time visualization** of alerts, logs, and metrics
+- 🏆 **Live leaderboard** to track performance
+- 🗺️ **Service topology** diagram showing microservice dependencies
+- 📈 **Step-by-step scoring** with correctness, efficiency, and speed breakdown
+
+**[Launch the UI above ↑]** to start triaging incidents!
 
 ## Why this exists
 
@@ -107,18 +121,37 @@ Every `reset()` call generates a unique incident from a seed. Same seed = same i
 
 ## Setup
 
+### Via HuggingFace Space (Recommended)
+
+Just click the UI above! The interactive interface lets you:
+1. Select a task difficulty (Easy → Expert)
+2. Choose a seed for reproducibility
+3. Take actions step-by-step or watch an agent
+4. View real-time alerts, logs, and metrics
+5. Submit your diagnosis and see your score
+
+### Local Development
+
 ```bash
-# Local development
+# Clone and install
 git clone https://huggingface.co/spaces/YOUR_USERNAME/sre-incident-triage
 cd sre-incident-triage
 pip install -r requirements.txt
+
+# Run Gradio UI (includes FastAPI backend)
+python app.py
+
+# Or run just the API backend
 uvicorn server.main:app --reload --port 8000
 
 # Docker
 docker build -t sre-env .
 docker run -p 7860:7860 sre-env
+```
 
-# Run baseline agent
+### Run Baseline Agent (Programmatic)
+
+```bash
 export API_BASE_URL="https://router.huggingface.co/v1"
 export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
 export HF_TOKEN="your-token"
@@ -140,6 +173,24 @@ python inference.py
 pip install openenv-core
 openenv validate
 ```
+
+## 🎨 UI Features
+
+The Gradio interface provides:
+
+- **Interactive Playground:** Execute actions manually and see immediate feedback
+- **Visual Alerts:** Color-coded critical and warning alerts
+- **Terminal-style Logs:** Syntax-highlighted log viewer with timestamps
+- **Metric Dashboard:** Real-time metrics with anomaly detection
+- **Service Topology:** ASCII diagram of microservice dependencies
+- **Episode History:** Track all actions and rewards per step
+- **Leaderboard:** Compare scores across models and tasks
+
+Perfect for:
+- 🎓 **Learning** SRE incident response patterns
+- 🤖 **Debugging** AI agent behavior
+- 🏆 **Competing** on the leaderboard
+- 📊 **Demoing** your model's capabilities
 
 ---
 title: Sre Incident Triage

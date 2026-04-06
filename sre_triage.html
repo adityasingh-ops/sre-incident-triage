@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SRE Incident Triage — OpenEnv Benchmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ─── Reset & Base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; scroll-behavior: smooth; }
+
+:root {
+  --bg:        #080b10;
+  --bg2:       #0d1117;
+  --bg3:       #111826;
+  --bg4:       #161e2e;
+  --border:    rgba(255,255,255,0.06);
+  --border2:   rgba(255,255,255,0.11);
+  --text:      #dce6f5;
+  --text2:     #7a90b0;
+  --text3:     #3d4f68;
+  --accent:    #3b8aff;
+  --accent2:   rgba(59,138,255,0.12);
+  --red:       #ff5f57;
+  --red2:      rgba(255,95,87,0.12);
+  --red3:      rgba(255,95,87,0.06);
+  --amber:     #ffb340;
+  --amber2:    rgba(255,179,64,0.12);
+  --green:     #30d158;
+  --green2:    rgba(48,209,88,0.12);
+  --purple:    #bf5af2;
+  --purple2:   rgba(191,90,242,0.12);
+  --cyan:      #32ade6;
+  --cyan2:     rgba(50,173,230,0.12);
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'Outfit', sans-serif;
+  --radius:    8px;
+  --radius2:   12px;
+  --shadow:    0 4px 24px rgba(0,0,0,0.5);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes pulse-ring {
+  0%   { transform: scale(1);    opacity: 1; }
+  70%  { transform: scale(2.2);  opacity: 0; }
+  100% { transform: scale(2.2);  opacity: 0; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+@keyframes scan {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* ─── Topbar ─────────────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 56px;
+  background: rgba(8,11,16,0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 20px;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.brand-icon {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.brand-icon .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  position: relative;
+  z-index: 1;
+}
+.brand-icon .ring {
+  position: absolute;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+.brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.brand-sep {
+  width: 1px; height: 16px;
+  background: var(--border2);
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--text3);
+  font-family: var(--mono);
+  letter-spacing: 0.05em;
+}
+
+.topbar-spacer { flex: 1; }
+
+.topbar-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: var(--mono);
+  border: 1px solid;
+}
+.pill-red    { background: var(--red2);    border-color: rgba(255,95,87,0.25);    color: var(--red); }
+.pill-green  { background: var(--green2);  border-color: rgba(48,209,88,0.25);    color: var(--green); }
+.pill-accent { background: var(--accent2); border-color: rgba(59,138,255,0.25);   color: var(--accent); }
+.pill-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+.topbar-time {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text3);
+  min-width: 72px;
+  text-align: right;
+}
+
+/* ─── Nav Tabs ───────────────────────────────────────────────────────────── */
+.nav {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 2px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.nav-btn {
+  padding: 10px 18px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.nav-btn:hover { color: var(--text2); }
+.nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ─── Tab Panels ─────────────────────────────────────────────────────────── */
+.tab { display: none; animation: fadeIn 0.25s ease; }
+.tab.active { display: block; }
+
+/* ─── Playground Layout ──────────────────────────────────────────────────── */
+.playground {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  min-height: calc(100vh - 97px);
+}
+
+.main-col {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.side-col {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  background: var(--bg2);
+}
+
+/* ─── Incident Banner ────────────────────────────────────────────────────── */
+.incident-banner {
+  position: relative;
+  background: var(--bg3);
+  border: 1px solid rgba(255,95,87,0.2);
+  border-radius: var(--radius2);
+  padding: 18px 20px 16px 24px;
+  overflow: hidden;
+}
+.incident-banner::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--red) 0%, rgba(255,95,87,0.3) 100%);
+}
+.incident-banner::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 120px;
+  background: linear-gradient(to left, rgba(255,95,87,0.04) 0%, transparent 100%);
+  pointer-events: none;
+}
+.inc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.inc-id-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.inc-id {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--red);
+  background: var(--red2);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,95,87,0.2);
+}
+.inc-sev {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+}
+.inc-step {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+}
+.inc-step span { color: var(--accent); font-weight: 600; }
+.inc-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+.inc-feedback {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inc-feedback::before {
+  content: '›';
+  color: var(--green);
+  font-size: 14px;
+}
+.inc-actions-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.quick-btn {
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-family: var(--mono);
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.quick-btn:hover {
+  background: var(--accent2);
+  border-color: rgba(59,138,255,0.3);
+  color: var(--accent);
+}
+
+/* ─── Section Label ──────────────────────────────────────────────────────── */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.section-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+
+/* ─── Alert Cards ────────────────────────────────────────────────────────── */
+.alerts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alert-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid;
+  transition: transform 0.1s;
+  cursor: default;
+}
+.alert-card:hover { transform: translateX(2px); }
+.alert-card.crit {
+  background: var(--red3);
+  border-color: rgba(255,95,87,0.2);
+}
+.alert-card.warn {
+  background: rgba(255,179,64,0.05);
+  border-color: rgba(255,179,64,0.18);
+}
+.alert-card.info {
+  background: var(--accent2);
+  border-color: rgba(59,138,255,0.2);
+}
+.alert-icon {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.crit .alert-icon { background: var(--red2);   color: var(--red);   }
+.warn .alert-icon { background: var(--amber2);  color: var(--amber); }
+.info .alert-icon { background: var(--accent2); color: var(--accent);}
+.alert-body { flex: 1; min-width: 0; }
+.alert-name {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--mono);
+  margin-bottom: 2px;
+}
+.crit .alert-name { color: var(--red); }
+.warn .alert-name { color: var(--amber); }
+.info .alert-name { color: var(--accent); }
+.alert-desc {
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alert-time {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  flex-shrink: 0;
+}
+
+/* ─── Metrics Strip ──────────────────────────────────────────────────────── */
+.metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.metric-tile {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.metric-tile:hover { border-color: var(--border2); }
+.metric-tile::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+}
+.metric-tile.danger::after { background: var(--red); }
+.metric-tile.warn::after   { background: var(--amber); }
+.metric-tile.ok::after     { background: var(--green); }
+.metric-tile.info::after   { background: var(--accent); }
+
+.metric-lbl {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.metric-val {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--mono);
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.metric-tile.danger .metric-val { color: var(--red); }
+.metric-tile.warn   .metric-val { color: var(--amber); }
+.metric-tile.ok     .metric-val { color: var(--green); }
+.metric-tile.info   .metric-val { color: var(--accent); }
+.metric-delta {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text3);
+}
+.delta-up   { color: var(--red); }
+.delta-down { color: var(--green); }
+
+/* ─── Log Viewer ─────────────────────────────────────────────────────────── */
+.log-wrap {
+  background: #040710;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.log-svc-tab {
+  display: flex;
+  gap: 4px;
+}
+.log-tab-btn {
+  padding: 3px 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.log-tab-btn:hover { color: var(--text2); border-color: var(--border2); }
+.log-tab-btn.active {
+  background: var(--accent2);
+  border-color: rgba(59,138,255,0.3);
+  color: var(--accent);
+}
+.log-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.log-clear-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.log-clear-btn:hover { color: var(--text2); }
+.log-body {
+  padding: 10px 14px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.log-row {
+  display: grid;
+  grid-template-columns: 72px 36px 110px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 1px 0;
+}
+.log-row:hover { background: rgba(255,255,255,0.015); border-radius: 3px; }
+.l-ts  { color: #252f42; }
+.l-err { color: var(--red); }
+.l-wrn { color: var(--amber); }
+.l-inf { color: var(--accent); }
+.l-svc { color: #3b5278; }
+.l-msg { color: #6a7f9e; }
+.l-msg em { font-style: normal; color: #8a9dbd; }
+
+/* ─── Topology ───────────────────────────────────────────────────────────── */
+.topo-wrap {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Side Panel Cards ───────────────────────────────────────────────────── */
+.side-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius2);
+  overflow: hidden;
+}
+.side-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.side-card-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.side-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+.side-card-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ─── Form Controls ──────────────────────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-lbl {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text3);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.field select,
+.field input {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 11px;
+  width: 100%;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.field select:focus,
+.field input:focus {
+  border-color: rgba(59,138,255,0.5);
+  background: rgba(59,138,255,0.04);
+}
+.field select option { background: #111826; }
+
+/* Custom select arrow */
+.select-wrap { position: relative; }
+.select-wrap::after {
+  content: '▾';
+  position: absolute;
+  right: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text3);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+.btn-primary {
+  width: 100%;
+  padding: 11px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 0 0 0 rgba(59,138,255,0);
+}
+.btn-primary:hover {
+  opacity: 0.9;
+  box-shadow: 0 0 20px rgba(59,138,255,0.3);
+}
+.btn-primary:active { transform: scale(0.98); }
+
+.btn-outline-green {
+  width: 100%;
+  padding: 11px;
+  background: transparent;
+  color: var(--green);
+  border: 1px solid rgba(48,209,88,0.35);
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline-green:hover {
+  background: var(--green2);
+  border-color: rgba(48,209,88,0.6);
+}
+.btn-outline-green:active { transform: scale(0.98); }
+
+/* ─── Params visibility ──────────────────────────────────────────────────── */
+.param-field { animation: fadeIn 0.2s ease; }
+
+/* ─── Episode History ────────────────────────────────────────────────────── */
+.history-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  transition: background 0.1s;
+  cursor: default;
+}
+.history-row:hover { background: rgba(255,255,255,0.02); }
+.h-step {
+  font-size: 10px;
+  color: var(--text3);
+  min-width: 22px;
+}
+.h-action { color: var(--text2); flex: 1; }
+.h-reward {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.h-pos { background: var(--green2);  color: var(--green);  }
+.h-neu { background: var(--bg4);     color: var(--text3);  }
+.h-neg { background: var(--red2);    color: var(--red);    }
+.h-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* ─── Score Display ──────────────────────────────────────────────────────── */
+.score-widget {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.score-left { display: flex; flex-direction: column; gap: 2px; }
+.score-lbl { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+.score-val {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--green);
+  font-family: var(--mono);
+  line-height: 1;
+}
+.score-bar-wrap {
+  flex: 1;
+  margin-left: 16px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.score-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--green) 100%);
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  width: 0%;
+}
+
+/* ─── Leaderboard ────────────────────────────────────────────────────────── */
+.lb-page { padding: 28px 32px; max-width: 960px; }
+.lb-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.lb-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.lb-sub { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+
+.lb-table { width: 100%; border-collapse: collapse; }
+.lb-table thead tr {
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.lb-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-family: var(--sans);
+}
+.lb-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.lb-table tbody tr:hover { background: var(--bg3); }
+.lb-table td {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text2);
+}
+.lb-rank { font-weight: 700; color: var(--accent); font-size: 13px; }
+.lb-rank-1 { color: #ffd700; }
+.lb-rank-2 { color: #c0c0c0; }
+.lb-rank-3 { color: #cd7f32; }
+.lb-score { font-weight: 700; color: var(--green); }
+.lb-model { color: var(--text); font-weight: 500; }
+.lb-check { color: var(--green); }
+.lb-cross { color: var(--red); }
+
+.task-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.task-1 { background: rgba(48,209,88,0.1);  color: var(--green); }
+.task-2 { background: var(--amber2);         color: var(--amber); }
+.task-3 { background: var(--red2);           color: var(--red); }
+.task-4 { background: var(--purple2);        color: var(--purple); }
+
+/* ─── Docs ────────────────────────────────────────────────────────────────── */
+.docs-page { padding: 28px 32px; max-width: 820px; }
+.docs-section { margin-bottom: 32px; }
+.docs-h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.docs-p {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.docs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.docs-table th {
+  text-align: left;
+  padding: 9px 14px;
+  background: var(--bg3);
+  color: var(--text2);
+  font-size: 11px;
+  border: 1px solid var(--border);
+}
+.docs-table td {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  vertical-align: top;
+}
+.docs-table td:first-child { color: var(--accent); font-weight: 500; }
+.docs-table td:last-child  { color: var(--text3); }
+
+.formula-block {
+  background: #020408;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--green);
+  line-height: 2.2;
+  margin: 10px 0;
+}
+.formula-comment { color: var(--text3); font-size: 11px; }
+
+.tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid;
+}
+.tag-cause { background: var(--purple2); color: var(--purple); border-color: rgba(191,90,242,0.25); }
+.tag-svc   { background: var(--accent2); color: var(--accent);  border-color: rgba(59,138,255,0.25); }
+
+.tip-box {
+  background: var(--cyan2);
+  border: 1px solid rgba(50,173,230,0.2);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.tip-icon { color: var(--cyan); font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.tip-text { font-size: 12px; color: var(--text2); line-height: 1.65; }
+.tip-text strong { color: var(--cyan); font-weight: 600; }
+
+/* ─── Toast notification ─────────────────────────────────────────────────── */
+.toast-wrap {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 12px;
+  border: 1px solid;
+  animation: fadeIn 0.2s ease;
+  pointer-events: auto;
+  max-width: 300px;
+}
+.toast-success { background: var(--green2); border-color: rgba(48,209,88,0.3); color: var(--green); }
+.toast-error   { background: var(--red2);   border-color: rgba(255,95,87,0.3);  color: var(--red); }
+.toast-info    { background: var(--accent2); border-color: rgba(59,138,255,0.3); color: var(--accent); }
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .playground { grid-template-columns: 1fr; }
+  .side-col { border-top: 1px solid var(--border); }
+  .metrics-strip { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .topbar-pills { display: none; }
+  .nav-btn { padding: 10px 12px; font-size: 11px; }
+  .lb-page, .docs-page { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── Toast container ─────────────────────────────────────────────────────── -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ─── Topbar ──────────────────────────────────────────────────────────────── -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <div class="brand-icon">
+      <div class="ring"></div>
+      <div class="dot"></div>
+    </div>
+    <span class="brand-name">SRE Triage</span>
+    <div class="brand-sep"></div>
+    <span class="brand-sub">OpenEnv Benchmark</span>
+  </div>
+
+  <div class="topbar-spacer"></div>
+
+  <div class="topbar-pills">
+    <div class="pill pill-red"><div class="pill-dot"></div>Incident Active</div>
+    <div class="pill pill-green" id="envStatus"><div class="pill-dot"></div>Env Ready</div>
+    <div class="pill pill-accent" id="scoreTopPill">Score: 0.00</div>
+  </div>
+  <div class="topbar-time" id="clock">--:--:--</div>
+</header>
+
+<!-- ─── Nav ─────────────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="switchTab('playground',this)">🎮 Playground</button>
+  <button class="nav-btn" onclick="switchTab('leaderboard',this)">🏆 Leaderboard</button>
+  <button class="nav-btn" onclick="switchTab('docs',this)">📚 Docs</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: PLAYGROUND                                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-playground" class="tab active">
+  <div class="playground">
+
+    <!-- Left: main content -->
+    <div class="main-col">
+
+      <!-- Incident Banner -->
+      <div class="incident-banner">
+        <div class="inc-header">
+          <div class="inc-id-row">
+            <span class="inc-id" id="incId">INC-0001 · TASK1</span>
+            <span class="inc-sev">CRITICAL P1</span>
+          </div>
+          <span class="inc-step">Step <span id="stepNum">0</span> / <span id="stepMax">6</span></span>
+        </div>
+        <div class="inc-title" id="incTitle">Elevated error rates detected. Start by listing active alerts to begin your investigation.</div>
+        <div class="inc-feedback" id="incFeedback">Awaiting first action — select an action from the panel on the right.</div>
+        <div class="inc-actions-row">
+          <button class="quick-btn" onclick="quickAction('list_alerts')">List Alerts</button>
+          <button class="quick-btn" onclick="quickAction('query_logs')">Query Logs</button>
+          <button class="quick-btn" onclick="quickAction('get_metrics')">Get Metrics</button>
+          <button class="quick-btn" onclick="quickAction('submit_diagnosis')">Submit Diagnosis</button>
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div>
+        <div class="section-head">
+          <span class="section-label">Active Alerts</span>
+          <span class="section-count" id="alertCount">0 alerts</span>
+        </div>
+        <div class="alerts-grid" id="alertsGrid">
+          <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">
+            Execute list_alerts action to view alerts here
+          </div>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div>
+        <div class="section-head">
+          <span class="section-label">Key Metrics</span>
+          <span class="section-count">last 5 min</span>
+        </div>
+        <div class="metrics-strip" id="metricsStrip">
+          <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">
+            Start an episode and execute actions to see metrics here
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs -->
+      <div>
+        <div class="section-head">
+          <span class="section-label">Service Logs</span>
+        </div>
+        <div class="log-wrap">
+          <div class="log-header">
+            <div class="log-svc-tab" id="logTabs">
+              <button class="log-tab-btn active">all services</button>
+            </div>
+            <div class="log-actions">
+              <button class="log-clear-btn" onclick="clearLogs()">clear</button>
+            </div>
+          </div>
+          <div class="log-body" id="logBody">
+            <div style="padding:20px 0;color:var(--text3);font-family:var(--mono);font-size:11px;">
+              Execute query_logs action to view logs here
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Topology -->
+      <div>
+        <div class="section-head">
+          <span class="section-label">Service Topology</span>
+          <span class="section-count">1 service degraded</span>
+        </div>
+        <div class="topo-wrap">
+          <svg viewBox="0 0 620 140" width="580" height="130" xmlns="http://www.w3.org/2000/svg" style="font-family:'IBM Plex Mono',monospace;">
+            <defs>
+              <marker id="arw" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                <path d="M0,1 L5,3 L0,5 Z" fill="#253044"/>
+              </marker>
+              <marker id="arw-red" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                <path d="M0,1 L5,3 L0,5 Z" fill="#ff5f57"/>
+              </marker>
+            </defs>
+            <!-- Lines normal -->
+            <line x1="88" y1="48" x2="150" y2="34" stroke="#253044" stroke-width="1" marker-end="url(#arw)"/>
+            <line x1="88" y1="56" x2="150" y2="76" stroke="#ff5f57" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arw-red)"/>
+            <line x1="238" y1="32" x2="305" y2="32" stroke="#253044" stroke-width="1" marker-end="url(#arw)"/>
+            <line x1="238" y1="78" x2="305" y2="56" stroke="#253044" stroke-width="1" marker-end="url(#arw)"/>
+            <line x1="238" y1="82" x2="305" y2="104" stroke="#253044" stroke-width="1" marker-end="url(#arw)"/>
+            <line x1="400" y1="48" x2="460" y2="35" stroke="#253044" stroke-width="1" marker-end="url(#arw)"/>
+            <line x1="400" y1="60" x2="460" y2="80" stroke="#253044" stroke-width="1" marker-end="url(#arw)"/>
+            <line x1="400" y1="106" x2="460" y2="106" stroke="#253044" stroke-width="1" marker-end="url(#arw)"/>
+
+            <!-- api-gateway -->
+            <rect x="5" y="35" width="83" height="30" rx="5" fill="#111826" stroke="#3b8aff" stroke-width="1.5"/>
+            <text x="46" y="54" text-anchor="middle" font-size="9" fill="#3b8aff">api-gateway</text>
+
+            <!-- auth-service -->
+            <rect x="150" y="18" width="88" height="28" rx="5" fill="#111826" stroke="#253044" stroke-width="1"/>
+            <text x="194" y="36" text-anchor="middle" font-size="9" fill="#3d4f68">auth-service</text>
+
+            <!-- order-service (highlighted red) -->
+            <rect x="150" y="62" width="88" height="30" rx="5" fill="#1a0e0e" stroke="#ff5f57" stroke-width="1.5"/>
+            <rect x="150" y="62" width="3" height="30" rx="1" fill="#ff5f57"/>
+            <text x="196" y="81" text-anchor="middle" font-size="9" fill="#ff5f57">order-service</text>
+
+            <!-- inventory-service -->
+            <rect x="305" y="18" width="95" height="28" rx="5" fill="#111826" stroke="#253044" stroke-width="1"/>
+            <text x="352" y="36" text-anchor="middle" font-size="9" fill="#3d4f68">inventory-svc</text>
+
+            <!-- fraud-service -->
+            <rect x="305" y="46" width="95" height="26" rx="5" fill="#111826" stroke="#253044" stroke-width="1"/>
+            <text x="352" y="63" text-anchor="middle" font-size="9" fill="#3d4f68">fraud-service</text>
+
+            <!-- payments -->
+            <rect x="305" y="92" width="95" height="26" rx="5" fill="#111826" stroke="#253044" stroke-width="1"/>
+            <text x="352" y="109" text-anchor="middle" font-size="9" fill="#3d4f68">payments-svc</text>
+
+            <!-- DBs -->
+            <rect x="460" y="20" width="80" height="26" rx="5" fill="#0c1018" stroke="#1c2a3a" stroke-width="1"/>
+            <text x="500" y="37" text-anchor="middle" font-size="9" fill="#253044">inventory-db</text>
+
+            <rect x="460" y="66" width="80" height="26" rx="5" fill="#0c1018" stroke="#1c2a3a" stroke-width="1"/>
+            <text x="500" y="83" text-anchor="middle" font-size="9" fill="#253044">fraud-db</text>
+
+            <rect x="460" y="92" width="80" height="26" rx="5" fill="#0c1018" stroke="#1c2a3a" stroke-width="1"/>
+            <text x="500" y="109" text-anchor="middle" font-size="9" fill="#253044">payment-db</text>
+
+            <!-- Legend -->
+            <circle cx="10" cy="128" r="3" fill="#ff5f57"/>
+            <text x="18" y="132" font-size="9" fill="#3d4f68">degraded service</text>
+            <circle cx="110" cy="128" r="3" fill="#3b8aff"/>
+            <text x="118" y="132" font-size="9" fill="#3d4f68">entry point</text>
+          </svg>
+        </div>
+      </div>
+
+    </div><!-- /main-col -->
+
+    <!-- Right: sidebar -->
+    <div class="side-col">
+
+      <!-- Score widget -->
+      <div class="score-widget">
+        <div class="score-left">
+          <div class="score-lbl">Total Score</div>
+          <div class="score-val" id="scoreVal">0.00</div>
+        </div>
+        <div class="score-bar-wrap">
+          <div class="score-bar" id="scoreBar"></div>
+        </div>
+      </div>
+
+      <!-- Episode Setup -->
+      <div class="side-card">
+        <div class="side-card-head">
+          <span class="side-card-title">Episode Setup</span>
+          <span class="side-badge" style="background:var(--green2);color:var(--green);border-radius:4px;font-family:var(--mono);font-size:10px;padding:2px 7px;">Ready</span>
+        </div>
+        <div class="side-card-body">
+          <div class="field">
+            <label class="field-lbl">Task Scenario</label>
+            <div class="select-wrap">
+              <select id="taskSelect" onchange="onTaskChange()">
+                <option value="task1">Task 1 — Single Failure (Easy, 6 steps)</option>
+                <option value="task2">Task 2 — Cascading Failure (Medium, 8 steps)</option>
+                <option value="task3">Task 3 — Silent Failure (Hard, 10 steps)</option>
+                <option value="task4">Task 4 — Multi-Service (Expert, 12 steps)</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-lbl">Seed (optional)</label>
+            <input type="text" id="seedInput" placeholder="e.g. 42 — leave blank for random"/>
+          </div>
+          <button class="btn-outline-green" onclick="startEpisode()">▶ Start New Episode</button>
+        </div>
+      </div>
+
+      <!-- Action Panel -->
+      <div class="side-card">
+        <div class="side-card-head">
+          <span class="side-card-title">Execute Action</span>
+          <span id="actionStepLabel" style="font-family:var(--mono);font-size:10px;color:var(--text3);">step <span id="actionStep">0</span></span>
+        </div>
+        <div class="side-card-body">
+          <div class="field">
+            <label class="field-lbl">Action Type</label>
+            <div class="select-wrap">
+              <select id="actionType" onchange="updateParamFields()">
+                <option value="list_alerts">list_alerts</option>
+                <option value="query_logs">query_logs</option>
+                <option value="get_metrics">get_metrics</option>
+                <option value="run_playbook">run_playbook</option>
+                <option value="rollback">rollback</option>
+                <option value="escalate">escalate</option>
+                <option value="submit_diagnosis">submit_diagnosis</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Service -->
+          <div class="field param-field" id="pService">
+            <label class="field-lbl">Service</label>
+            <div class="select-wrap">
+              <select id="pServiceVal">
+                <option>api-gateway</option>
+                <option>auth-service</option>
+                <option value="order-service" selected>order-service</option>
+                <option>payments-service</option>
+                <option>inventory-service</option>
+                <option>fraud-service</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Minutes Ago -->
+          <div class="field param-field" id="pMinutes" style="display:none">
+            <label class="field-lbl">Minutes Ago</label>
+            <input type="number" id="pMinutesVal" value="10" min="1" max="60"/>
+          </div>
+
+          <!-- Metric -->
+          <div class="field param-field" id="pMetric" style="display:none">
+            <label class="field-lbl">Metric</label>
+            <div class="select-wrap">
+              <select id="pMetricVal">
+                <option>error_rate</option>
+                <option>latency</option>
+                <option>cpu_usage</option>
+                <option>memory_usage</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Playbook -->
+          <div class="field param-field" id="pPlaybook" style="display:none">
+            <label class="field-lbl">Playbook Name</label>
+            <div class="select-wrap">
+              <select id="pPlaybookVal">
+                <option>restart_service</option>
+                <option>scale_up</option>
+                <option>clear_cache</option>
+                <option>increase_db_pool</option>
+                <option>kill_zombie_processes</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Version -->
+          <div class="field param-field" id="pVersion" style="display:none">
+            <label class="field-lbl">Version (rollback to)</label>
+            <input type="text" id="pVersionVal" value="v1.0.0"/>
+          </div>
+
+          <!-- Severity -->
+          <div class="field param-field" id="pSeverity" style="display:none">
+            <label class="field-lbl">Severity</label>
+            <div class="select-wrap">
+              <select id="pSeverityVal"><option>P1</option><option>P2</option></select>
+            </div>
+          </div>
+
+          <!-- Escalate message -->
+          <div class="field param-field" id="pMessage" style="display:none">
+            <label class="field-lbl">Message</label>
+            <input type="text" id="pMessageVal" value="Need urgent help with this incident."/>
+          </div>
+
+          <!-- Root Cause -->
+          <div class="field param-field" id="pRootCause" style="display:none">
+            <label class="field-lbl">Root Cause</label>
+            <div class="select-wrap">
+              <select id="pRootCauseVal">
+                <option value="db_connection_exhaustion">db_connection_exhaustion</option>
+                <option value="bad_deploy">bad_deploy</option>
+                <option value="memory_exhaustion">memory_exhaustion</option>
+                <option value="oom_kill">oom_kill</option>
+                <option value="high_latency">high_latency</option>
+                <option value="cpu_exhaustion">cpu_exhaustion</option>
+                <option value="cache_failure">cache_failure</option>
+                <option value="external_timeout">external_timeout</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Affected Service -->
+          <div class="field param-field" id="pAffected" style="display:none">
+            <label class="field-lbl">Affected Service</label>
+            <div class="select-wrap">
+              <select id="pAffectedVal">
+                <option>api-gateway</option>
+                <option>auth-service</option>
+                <option value="order-service" selected>order-service</option>
+                <option>payments-service</option>
+                <option>inventory-service</option>
+                <option>fraud-service</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="executeAction()">Execute Action</button>
+        </div>
+      </div>
+
+      <!-- Episode History -->
+      <div class="side-card" style="flex:1">
+        <div class="side-card-head">
+          <span class="side-card-title">Episode History</span>
+          <span id="historyCount" style="font-family:var(--mono);font-size:10px;color:var(--accent);">0 steps</span>
+        </div>
+        <div class="history-scroll" id="historyList">
+          <div class="h-empty">No actions yet — start an episode.</div>
+        </div>
+      </div>
+
+    </div><!-- /side-col -->
+  </div><!-- /playground -->
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: LEADERBOARD                                                           -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-leaderboard" class="tab">
+  <div class="lb-page">
+    <div class="lb-header">
+      <div>
+        <div class="lb-title">Top Performers</div>
+        <div class="lb-sub">All tasks · sorted by score desc</div>
+      </div>
+      <button class="btn-primary" style="width:auto;padding:8px 18px;font-size:11px;" onclick="refreshLeaderboard()">↺ Refresh</button>
+    </div>
+    <table class="lb-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Model</th>
+          <th>Task</th>
+          <th>Score</th>
+          <th>Steps</th>
+          <th>Root Cause</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody id="lbBody">
+        <tr>
+          <td colspan="7" style="text-align:center;padding:40px;color:var(--text3);font-size:13px;">
+            Loading leaderboard...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: DOCS                                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-docs" class="tab">
+  <div class="docs-page">
+
+    <div class="docs-section">
+      <div class="docs-h2">How It Works</div>
+      <p class="docs-p">SRE Triage is an <strong>OpenEnv-compliant benchmark</strong> for training and evaluating AI agents on production incident response. Drop into a simulated outage, investigate using logs/metrics/alerts, and identify the root cause before running out of steps.</p>
+      <div class="tip-box">
+        <div class="tip-icon">TIP</div>
+        <div class="tip-text"><strong>Start with list_alerts</strong> every episode. Then query logs on the alerting service, confirm with metrics, run the appropriate playbook or rollback, and finally submit_diagnosis. Don't waste steps on services that aren't alerting.</div>
+      </div>
+    </div>
+
+    <div class="docs-section">
+      <div class="docs-h2">Available Actions</div>
+      <table class="docs-table">
+        <thead>
+          <tr><th>Action</th><th>What It Does</th><th>Params</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>list_alerts</td><td>Returns all currently firing alerts across services</td><td>—</td></tr>
+          <tr><td>query_logs</td><td>Retrieves recent log lines from a service</td><td>service, minutes_ago</td></tr>
+          <tr><td>get_metrics</td><td>Pulls metric timeseries with baseline comparison</td><td>service, metric</td></tr>
+          <tr><td>run_playbook</td><td>Executes a remediation runbook against a service</td><td>name, service</td></tr>
+          <tr><td>rollback</td><td>Rolls a service back to a known-good version</td><td>service, version</td></tr>
+          <tr><td>escalate</td><td>Pages an on-call human with severity + message</td><td>severity, message</td></tr>
+          <tr><td>submit_diagnosis</td><td>Submit final root cause — ends the episode</td><td>root_cause, affected_service</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="docs-section">
+      <div class="docs-h2">Scoring Formula</div>
+      <div class="formula-block">
+        Total Score = 0.50 × Correctness + 0.30 × Efficiency + 0.20 × Speed<br>
+        <span class="formula-comment">
+          Correctness  = 1.0 if root_cause + service both correct, else 0.0<br>
+          Efficiency   = max(0, 1 - (extra_steps / max_steps))<br>
+          Speed        = max(0, 1 - (elapsed_seconds / time_limit))
+        </span>
+      </div>
+    </div>
+
+    <div class="docs-section">
+      <div class="docs-h2">Task Difficulty</div>
+      <table class="docs-table">
+        <thead><tr><th>Task</th><th>Scenario</th><th>Max Steps</th><th>What to Look For</th></tr></thead>
+        <tbody>
+          <tr><td>task1</td><td>Single service failure</td><td>6</td><td>Clear logs and alerts — straightforward</td></tr>
+          <tr><td>task2</td><td>Cascading failure</td><td>8</td><td>Multiple services impacted, trace upstream</td></tr>
+          <tr><td>task3</td><td>Silent failure</td><td>10</td><td>No obvious alerts — correlate metrics carefully</td></tr>
+          <tr><td>task4</td><td>Multi-service incident</td><td>12</td><td>Concurrent failures, requires broad investigation</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="docs-section">
+      <div class="docs-h2">Valid Root Causes</div>
+      <div class="tag-grid">
+        <span class="tag tag-cause">db_connection_exhaustion</span>
+        <span class="tag tag-cause">bad_deploy</span>
+        <span class="tag tag-cause">memory_exhaustion</span>
+        <span class="tag tag-cause">oom_kill</span>
+        <span class="tag tag-cause">high_latency</span>
+        <span class="tag tag-cause">cpu_exhaustion</span>
+        <span class="tag tag-cause">cache_failure</span>
+        <span class="tag tag-cause">external_timeout</span>
+      </div>
+    </div>
+
+    <div class="docs-section">
+      <div class="docs-h2">Services</div>
+      <div class="tag-grid">
+        <span class="tag tag-svc">api-gateway</span>
+        <span class="tag tag-svc">auth-service</span>
+        <span class="tag tag-svc">order-service</span>
+        <span class="tag tag-svc">payments-service</span>
+        <span class="tag tag-svc">inventory-service</span>
+        <span class="tag tag-svc">fraud-service</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ─── Scripts ─────────────────────────────────────────────────────────────── -->
+<script>
+/* ── State ──────────────────────────────────────────────────────────────── */
+const ENV_BASE = 'http://localhost:8000';
+let state = {
+  step: 0, maxStep: 6, score: 0, done: false,
+  history: [], taskId: 'task1', seed: null, episodeActive: false
+};
+
+const TASK_MAX = { task1:6, task2:8, task3:10, task4:12 };
+
+/* ── Clock ──────────────────────────────────────────────────────────────── */
+function tickClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+/* ── Tab switching ──────────────────────────────────────────────────────── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+function toast(msg, type = 'info') {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(6px)'; el.style.transition = '0.3s'; }, 2800);
+  setTimeout(() => el.remove(), 3100);
+}
+
+/* ── Task change ────────────────────────────────────────────────────────── */
+function onTaskChange() {
+  const t = document.getElementById('taskSelect').value;
+  state.maxStep = TASK_MAX[t] || 6;
+  document.getElementById('stepMax').textContent = state.maxStep;
+}
+
+/* ── Param field visibility ─────────────────────────────────────────────── */
+const PARAM_MAP = {
+  list_alerts:       [],
+  query_logs:        ['pService','pMinutes'],
+  get_metrics:       ['pService','pMetric'],
+  run_playbook:      ['pService','pPlaybook'],
+  rollback:          ['pService','pVersion'],
+  escalate:          ['pSeverity','pMessage'],
+  submit_diagnosis:  ['pRootCause','pAffected'],
+};
+
+function updateParamFields() {
+  const at = document.getElementById('actionType').value;
+  const all = ['pService','pMinutes','pMetric','pPlaybook','pVersion','pSeverity','pMessage','pRootCause','pAffected'];
+  all.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (PARAM_MAP[at]||[]).includes(id) ? 'flex' : 'none';
+  });
+}
+
+/* ── Quick action buttons ───────────────────────────────────────────────── */
+function quickAction(type) {
+  document.getElementById('actionType').value = type;
+  updateParamFields();
+  toast('Action set: ' + type, 'info');
+}
+
+/* ── Start episode ──────────────────────────────────────────────────────── */
+async function startEpisode() {
+  const taskId = document.getElementById('taskSelect').value;
+  const seedRaw = document.getElementById('seedInput').value.trim();
+  const seed = seedRaw ? parseInt(seedRaw) : Math.floor(Math.random() * 99999);
+
+  state = { step: 0, maxStep: TASK_MAX[taskId], score: 0, done: false, history: [], taskId, seed, episodeActive: true };
+
+  document.getElementById('stepNum').textContent = '0';
+  document.getElementById('stepMax').textContent = state.maxStep;
+  document.getElementById('actionStep').textContent = '0';
+  document.getElementById('incId').textContent = `INC-${String(seed).slice(-4).padStart(4,'0')} · ${taskId.toUpperCase()}`;
+  document.getElementById('incTitle').textContent = getTaskTitle(taskId);
+  document.getElementById('incFeedback').textContent = 'Episode started. Begin your investigation.';
+  updateScore(0);
+  document.getElementById('historyList').innerHTML = '<div class="h-empty">Episode active — take your first action.</div>';
+  document.getElementById('historyCount').textContent = '0 steps';
+
+  // Call real backend if available
+  try {
+    const res = await fetch(`${ENV_BASE}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, seed })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      applyObservation(data.observation);
+      toast(`Episode started · seed=${data.seed}`, 'success');
+      return;
+    }
+  } catch (e) { /* backend not running — demo mode */ }
+
+  toast(`Demo mode · task=${taskId} · seed=${seed}`, 'success');
+}
+
+/* ── Execute action ─────────────────────────────────────────────────────── */
+async function executeAction() {
+  if (!state.episodeActive) {
+    toast('Start an episode first!', 'error');
+    return;
+  }
+  if (state.done) {
+    toast('Episode complete. Start a new one.', 'info');
+    return;
+  }
+
+  const at = document.getElementById('actionType').value;
+  const params = buildParams(at);
+
+  state.step++;
+  document.getElementById('stepNum').textContent = state.step;
+  document.getElementById('actionStep').textContent = state.step;
+
+  // Try real backend
+  let reward = 0, feedback = '';
+  try {
+    const res = await fetch(`${ENV_BASE}/step`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: { action_type: at, params } })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      reward = data.reward || 0;
+      state.score += reward;
+      state.done = data.done;
+      applyObservation(data.observation);
+      feedback = data.observation?.last_action_feedback || 'Action executed.';
+      addHistory(at, reward);
+      updateScore(state.score);
+      if (state.done) {
+        toast(`Episode complete! Final score: ${state.score.toFixed(3)}`, 'success');
+      }
+      return;
+    }
+  } catch (e) { /* demo mode */ }
+
+  // Demo rewards
+  reward = DEMO_REWARDS[at] || 0;
+  state.score = Math.min(1, state.score + reward);
+  feedback = DEMO_FEEDBACK[at] || 'Action executed.';
+  if (at === 'submit_diagnosis') { state.done = true; }
+
+  document.getElementById('incFeedback').textContent = feedback;
+  addHistory(at, reward);
+  updateScore(state.score);
+
+  if (state.done) {
+    toast(`Episode complete! Score: ${state.score.toFixed(3)}`, 'success');
+  } else if (state.step >= state.maxStep) {
+    state.done = true;
+    toast('Max steps reached. Episode over.', 'error');
+  } else {
+    toast(`${at} → reward ${reward >= 0 ? '+' : ''}${reward.toFixed(2)}`, reward > 0 ? 'success' : 'info');
+  }
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+function buildParams(at) {
+  return {
+    service:          document.getElementById('pServiceVal')?.value,
+    minutes_ago:      parseInt(document.getElementById('pMinutesVal')?.value || 10),
+    metric:           document.getElementById('pMetricVal')?.value,
+    name:             document.getElementById('pPlaybookVal')?.value,
+    version:          document.getElementById('pVersionVal')?.value,
+    severity:         document.getElementById('pSeverityVal')?.value,
+    message:          document.getElementById('pMessageVal')?.value,
+    root_cause:       document.getElementById('pRootCauseVal')?.value,
+    affected_service: document.getElementById('pAffectedVal')?.value,
+  };
+}
+
+function applyObservation(obs) {
+  if (!obs) return;
+  if (obs.task_description) document.getElementById('incTitle').textContent = obs.task_description;
+  if (obs.last_action_feedback) document.getElementById('incFeedback').textContent = obs.last_action_feedback;
+  if (typeof obs.step === 'number') {
+    document.getElementById('stepNum').textContent = obs.step;
+    document.getElementById('actionStep').textContent = obs.step;
+    state.step = obs.step;
+  }
+  
+  // Render alerts
+  if (obs.alerts) {
+    renderAlerts(obs.alerts);
+  }
+  
+  // Render logs
+  if (obs.logs) {
+    renderLogs(obs.logs);
+  }
+  
+  // Render metrics
+  if (obs.metrics) {
+    renderMetrics(obs.metrics);
+  }
+}
+
+function renderAlerts(alerts) {
+  const grid = document.getElementById('alertsGrid');
+  const count = document.getElementById('alertCount');
+  
+  if (!alerts || alerts.length === 0) {
+    grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--green);font-size:12px;">✓ No alerts firing</div>';
+    count.textContent = '0 alerts';
+    return;
+  }
+  
+  count.textContent = `${alerts.length} firing`;
+  let html = '';
+  
+  alerts.forEach(alert => {
+    const severity = alert.severity || 'info';
+    const cssClass = severity === 'critical' ? 'crit' : severity === 'warning' ? 'warn' : 'info';
+    const icon = severity === 'critical' ? '!' : '~';
+    const time = alert.fired_at ? new Date(alert.fired_at).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) : '--:--';
+    
+    html += `
+      <div class="alert-card ${cssClass}">
+        <div class="alert-icon">${icon}</div>
+        <div class="alert-body">
+          <div class="alert-name">${alert.name || 'Alert'}</div>
+          <div class="alert-desc">${alert.service || ''} · ${alert.message || 'No description'}</div>
+        </div>
+        <div class="alert-time">${time}</div>
+      </div>`;
+  });
+  
+  grid.innerHTML = html;
+}
+
+function renderLogs(logs) {
+  const body = document.getElementById('logBody');
+  
+  if (!logs || logs.length === 0) {
+    body.innerHTML = '<div style="padding:20px 0;color:var(--text3);font-family:var(--mono);font-size:11px;">No logs returned</div>';
+    return;
+  }
+  
+  let html = '';
+  logs.forEach(log => {
+    const level = log.level || 'INFO';
+    const cssClass = level === 'ERROR' ? 'l-err' : level === 'WARN' ? 'l-wrn' : 'l-inf';
+    const time = log.timestamp ? log.timestamp.substring(11, 19) : '--:--:--';
+    const service = log.service || 'unknown';
+    const message = log.message || '';
+    
+    html += `
+      <div class="log-row">
+        <span class="l-ts">${time}</span>
+        <span class="${cssClass}">${level.substring(0, 3)}</span>
+        <span class="l-svc">${service}</span>
+        <span class="l-msg">${message}</span>
+      </div>`;
+  });
+  
+  body.innerHTML = html;
+}
+
+function renderMetrics(metrics) {
+  const strip = document.getElementById('metricsStrip');
+  
+  if (!metrics || Object.keys(metrics).length === 0) {
+    strip.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">No metrics returned</div>';
+    return;
+  }
+  
+  let html = '';
+  
+  // Flatten metrics structure
+  for (const [service, metricData] of Object.entries(metrics)) {
+    if (typeof metricData === 'object' && metricData !== null) {
+      for (const [metricName, values] of Object.entries(metricData)) {
+        if (typeof values === 'object' && values !== null) {
+          const current = values.current || 0;
+          const baseline = values.baseline || current;
+          const diff = current - baseline;
+          const diffPct = baseline !== 0 ? ((diff / baseline) * 100) : 0;
+          
+          // Determine severity
+          let tileClass = 'ok';
+          if (Math.abs(diffPct) > 50) tileClass = 'danger';
+          else if (Math.abs(diffPct) > 20) tileClass = 'warn';
+          
+          const deltaClass = diffPct > 0 ? 'delta-up' : 'delta-down';
+          const deltaSymbol = diffPct > 0 ? '▲' : '▼';
+          const deltaText = diffPct === 0 ? 'normal' : `${deltaSymbol} ${diffPct > 0 ? '+' : ''}${diffPct.toFixed(0)}%`;
+          
+          // Format metric name
+          const displayName = metricName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          
+          // Format value
+          let displayValue = current.toFixed(2);
+          if (metricName.includes('rate')) displayValue = (current * 100).toFixed(1) + '%';
+          else if (metricName.includes('latency')) displayValue = current.toFixed(2) + 's';
+          else if (metricName.includes('cpu') || metricName.includes('memory')) displayValue = current.toFixed(0) + '%';
+          
+          html += `
+            <div class="metric-tile ${tileClass}">
+              <div class="metric-lbl">${displayName}</div>
+              <div class="metric-val">${displayValue}</div>
+              <div class="metric-delta"><span class="${deltaClass}">${deltaText}</span> vs baseline</div>
+            </div>`;
+        }
+      }
+    }
+  }
+  
+  if (html) {
+    strip.innerHTML = html;
+  } else {
+    strip.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">No metric data available</div>';
+  }
+}
+
+function updateScore(s) {
+  const pct = Math.min(100, Math.round(s * 100));
+  document.getElementById('scoreVal').textContent = s.toFixed(2);
+  document.getElementById('scoreBar').style.width = pct + '%';
+  document.getElementById('scoreTopPill').textContent = 'Score: ' + s.toFixed(2);
+}
+
+function addHistory(at, reward) {
+  state.history.unshift({ step: state.step, action: at, reward });
+  document.getElementById('historyCount').textContent = state.step + ' steps';
+
+  const cls = reward > 0 ? 'h-pos' : reward < 0 ? 'h-neg' : 'h-neu';
+  const sign = reward >= 0 ? '+' : '';
+  const row = `
+    <div class="history-row">
+      <span class="h-step">S${state.step}</span>
+      <span class="h-action">${at}</span>
+      <span class="h-reward ${cls}">${sign}${reward.toFixed(2)}</span>
+    </div>`;
+
+  const hl = document.getElementById('historyList');
+  if (hl.querySelector('.h-empty')) hl.innerHTML = '';
+  hl.insertAdjacentHTML('afterbegin', row);
+}
+
+function getTaskTitle(taskId) {
+  const titles = {
+    task1: 'Single service failure detected. Elevated error rates on api-gateway. Investigate and identify the root cause.',
+    task2: 'Cascading failure in progress. Multiple downstream services reporting errors. Trace back to the origin.',
+    task3: 'Silent failure scenario — no obvious alerts firing. Correlate metrics across services to find the anomaly.',
+    task4: 'Multi-service incident. Concurrent failures across the stack. Broad investigation required.',
+  };
+  return titles[taskId] || titles.task1;
+}
+
+function filterLog(btn, svc) {
+  document.querySelectorAll('.log-tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  toast(`Showing logs: ${svc}`, 'info');
+}
+
+function clearLogs() {
+  document.getElementById('logBody').innerHTML =
+    '<div style="padding:10px 0;color:var(--text3);font-family:var(--mono);font-size:11px;">Log buffer cleared.</div>';
+}
+
+async function refreshLeaderboard() {
+  const tbody = document.getElementById('lbBody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3);">Loading...</td></tr>';
+  
+  try {
+    const res = await fetch(`${ENV_BASE}/leaderboard`);
+    if (!res.ok) throw new Error('Failed to fetch');
+    
+    const data = await res.json();
+    
+    if (!data || data.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">
+            No entries yet. Complete an episode to appear on the leaderboard!
+          </td>
+        </tr>`;
+      toast('Leaderboard is empty', 'info');
+      return;
+    }
+    
+    // Build table rows
+    let html = '';
+    data.forEach((entry, i) => {
+      const rank = i + 1;
+      const rankClass = rank <= 3 ? `lb-rank-${rank}` : '';
+      const taskNum = entry.task_id ? entry.task_id.replace('task', '') : '1';
+      const correct = entry.root_cause_correct ? '✓ correct' : '✗ incorrect';
+      const correctClass = entry.root_cause_correct ? 'lb-check' : 'lb-cross';
+      const timestamp = entry.timestamp ? entry.timestamp.substring(0, 16).replace('T', ' ') : 'N/A';
+      
+      html += `
+        <tr>
+          <td class="lb-rank ${rankClass}">${rank}</td>
+          <td class="lb-model">${entry.model_name || 'Unknown'}</td>
+          <td><span class="task-chip task-${taskNum}">${entry.task_id || 'N/A'}</span></td>
+          <td class="lb-score">${(entry.score || 0).toFixed(3)}</td>
+          <td>${entry.steps_taken || 0}</td>
+          <td class="${correctClass}">${correct}</td>
+          <td>${timestamp}</td>
+        </tr>`;
+    });
+    
+    tbody.innerHTML = html;
+    toast('Leaderboard refreshed', 'success');
+    
+  } catch (e) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align:center;padding:40px;color:var(--red);">
+          Failed to load leaderboard. Backend may be offline.
+        </td>
+      </tr>`;
+    toast('Failed to load leaderboard', 'error');
+  }
+}
+
+/* ── Demo mode constants ─────────────────────────────────────────────────── */
+const DEMO_REWARDS = {
+  list_alerts:      0.10,
+  query_logs:       0.10,
+  get_metrics:      0.05,
+  run_playbook:     0.15,
+  rollback:         0.10,
+  escalate:         0.05,
+  submit_diagnosis: 0.50,
+};
+const DEMO_FEEDBACK = {
+  list_alerts:      '2 alerts found: HighErrorRate (critical), SlowDatabaseQueries (warning).',
+  query_logs:       'Logs retrieved. Key finding: db pool exhausted — max_connections=50 reached repeatedly.',
+  get_metrics:      'Metrics pulled. error_rate: 14.7% (+1230% vs baseline). latency p99: 3.2s.',
+  run_playbook:     'Playbook increase_db_pool executed. DB pool limit raised to 200. Error rate decreasing.',
+  rollback:         'Rollback initiated to v1.0.0. Deployment reverting...',
+  escalate:         'P1 escalation sent. On-call engineer paged.',
+  submit_diagnosis: 'Diagnosis submitted. Root cause: db_connection_exhaustion on order-service. Evaluating...',
+};
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+updateParamFields();
+refreshLeaderboard(); // Load leaderboard on page load
+</script>
+
+</body>
+</html>
