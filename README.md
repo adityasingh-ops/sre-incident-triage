@@ -17,34 +17,26 @@ tags:
 
 # SRE Incident Triage Environment
 
-> An OpenEnv-compliant benchmark for training and evaluating AI agents on **production incident response** — the most time-critical, high-stakes task in software engineering.
+An OpenEnv-compliant benchmark environment for training and evaluating AI agents on production incident response. This environment simulates the work of an on-call Site Reliability Engineer investigating service outages in a microservices architecture.
 
-## 🎮 Interactive UI
+## Overview
 
-This Space features a **production-grade Gradio interface** that lets you:
+When production systems fail, engineers need to quickly diagnose the problem by reading logs, checking metrics, correlating alerts across services, and identifying root causes under time pressure. This environment models that scenario with procedurally generated incidents that require systematic investigation.
 
-- 🎯 **Play incidents manually** or watch AI agents solve them
-- 📊 **Real-time visualization** of alerts, logs, and metrics
-- 🏆 **Live leaderboard** to track performance
-- 🗺️ **Service topology** diagram showing microservice dependencies
-- 📈 **Step-by-step scoring** with correctness, efficiency, and speed breakdown
+The environment provides a simulated production topology with six microservices, four databases, and a realistic monitoring stack. Agents interact through a structured API to query logs, retrieve metrics, run remediation playbooks, and submit diagnoses. Each episode is fully reproducible using a random seed.
 
-**[Launch the UI above ↑]** to start triaging incidents!
+## System Architecture
 
-## Why this exists
+The simulated production environment consists of the following services:
 
-Every company running software at scale has on-call engineers who get paged at 2am, stare at dashboards, and have to figure out what broke and why — often under pressure, with incomplete information. This environment simulates exactly that. It is the first OpenEnv benchmark focused on **SRE reasoning and remediation**.
+```
+api-gateway → auth-service → user-db
+           → order-service → payments-service → payment-db
+                          → inventory-service → inventory-db
+                                              → fraud-service
+```
 
-An agent that scores well here can:
-- Read noisy logs across multiple services
-- Correlate metrics to identify anomalies
-- Distinguish root causes from symptoms
-- Select the correct remediation action
-- Do all of this efficiently, without unnecessary steps
-
-## Environment overview
-
-The agent is dropped into a fake production system with 6 microservices, 4 databases, and a realistic alert stack. A procedurally generated incident has occurred — seeded for full reproducibility. The agent must investigate using structured actions and submit a diagnosis before running out of steps.
+Incidents are generated to affect one or more services with various failure modes including database connection exhaustion, memory leaks, CPU saturation, bad deployments, cache failures, and external timeouts.
 
 **Fake production topology:**
 
@@ -80,124 +72,219 @@ Each step returns:
 
 ## Tasks
 
-| ID | Name | Difficulty | Max Steps | Description |
-|---|---|---|---|---|
-| `task1` | Single service failure | Easy | 6 | One service has a clear failure. Logs and alerts point directly to root cause. |
-| `task2` | Cascading failure | Medium | 8 | A failure in one service causes degradation downstream. Agent must trace the cascade. |
-| `task3` | Silent failure | Hard | 10 | No critical alerts. Business metrics dropping. Agent must correlate logs, metrics, and a recent deploy. |
-| `task4` | Multi-service incident | Expert | 12 | Three services show anomalies. Full investigation + remediation + incident report required. |
+The environment provides four tasks with increasing difficulty:
 
-## Reward function
+**Task 1: Single Service Failure (Easy)**
+- Maximum steps: 6
+- A single service has a clear failure mode with obvious symptoms
+- Logs and alerts directly indicate the root cause
+- Minimal investigation required
 
-```
-reward = 0.50 × correctness + 0.30 × efficiency + 0.20 × speed
-```
+**Task 2: Cascading Failure (Medium)**
+- Maximum steps: 8
+- A failure in one service causes downstream degradation
+- Agent must trace the dependency chain to find the true root cause
+- Requires correlating information across multiple services
 
-- **Correctness** — did the agent identify the right root cause (0.6) and affected service (0.4)?
-- **Efficiency** — did the agent take unnecessary actions? Penalises wasteful steps.
-- **Speed** — how quickly did the agent solve it relative to max steps?
-- **Partial rewards** — small rewards during the episode for querying the right service, running the correct playbook, etc.
+**Task 3: Silent Failure (Hard)**
+- Maximum steps: 10
+- No critical alerts firing initially
+- Business metrics show degradation
+- Agent must correlate logs, metrics, and recent deployment history
+- Root cause is not immediately obvious
 
-## Root causes
+**Task 4: Multi-Service Incident (Expert)**
+- Maximum steps: 12
+- Multiple services showing anomalies simultaneously
+- Agent must investigate all affected services
+- Identify the single underlying root cause
+- Execute correct remediation
+- Provide complete incident summary
 
-`db_connection_exhaustion` | `bad_deploy` | `memory_exhaustion` | `oom_kill` | `high_latency` | `cpu_exhaustion` | `cache_failure` | `external_timeout`
+## Reward Function
 
-## Procedural generation
+Episodes are scored using a weighted combination of three factors:
 
-Every `reset()` call generates a unique incident from a seed. Same seed = same incident (reproducible). Different seed = different service, different failure mode, different logs and metrics. The agent cannot memorise answers — it must actually reason.
+**Correctness (50%)**
+- Root cause identification: 60% of correctness score
+- Affected service identification: 40% of correctness score
 
-## API endpoints
+**Efficiency (30%)**
+- Penalty for unnecessary actions
+- Penalty for redundant queries
+- Bonus for focused investigation
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/reset` | Start episode `{"task_id": "task1", "seed": 42}` |
-| POST | `/step` | Take action `{"action": {"action_type": "...", "params": {}}}` |
-| GET | `/state` | Current episode state (debug) |
-| GET | `/tasks` | List all tasks |
-| GET | `/leaderboard` | Scores from completed episodes |
-| GET | `/health` | Health check |
-| GET | `/docs` | Interactive Swagger UI |
+**Speed (20%)**
+- Based on steps taken relative to maximum allowed
+- Faster resolution receives higher score
 
-## Setup
+**Partial Rewards**
+- Small positive rewards during the episode for productive actions
+- Querying logs from the affected service
+- Retrieving relevant metrics
+- Running appropriate remediation
 
-### Via HuggingFace Space (Recommended)
+Final reward is clamped to the range [0.0, 1.0].
 
-Just click the UI above! The interactive interface lets you:
-1. Select a task difficulty (Easy → Expert)
-2. Choose a seed for reproducibility
-3. Take actions step-by-step or watch an agent
-4. View real-time alerts, logs, and metrics
-5. Submit your diagnosis and see your score
+## Episode Generation
 
-### Local Development
+Each episode is procedurally generated from a random seed. The same seed will always produce:
+- The same affected service
+- The same root cause
+- The same log patterns
+- The same metric anomalies
+- The same alert configuration
+
+Different seeds produce different incidents, preventing memorization and requiring genuine diagnostic reasoning.
+
+## API Reference
+
+**POST /reset**
+- Request body: `{"task_id": "task1", "seed": 42}`
+- Returns: Initial observation and episode metadata
+- Starts a new episode with the specified task and optional seed
+
+**POST /step**
+- Request body: `{"action": {"action_type": "query_logs", "params": {"service": "auth-service", "minutes_ago": 10}}}`
+- Returns: Observation, reward, done flag, and info dict
+- Executes one action in the current episode
+
+**GET /state**
+- Returns: Complete episode state including history and internal variables
+- Useful for debugging and analysis
+
+**GET /tasks**
+- Returns: List of all available tasks with descriptions and parameters
+
+**GET /health**
+- Returns: Service health status
+
+**GET /metadata**
+- Returns: Environment metadata and configuration
+
+**GET /schema**
+- Returns: JSON schemas for Action, Observation, and State types
+
+**GET /docs**
+- Returns: Interactive Swagger UI for API exploration
+
+## Installation and Usage
+
+**Local Setup**
 
 ```bash
-# Clone and install
-git clone https://huggingface.co/spaces/YOUR_USERNAME/sre-incident-triage
+# Clone repository
+git clone https://huggingface.co/spaces/adityasingh-op/sre-incident-triage
 cd sre-incident-triage
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Run Gradio UI (includes FastAPI backend)
-python app.py
+# Start API server
+uvicorn server.main:app --host 0.0.0.0 --port 8000
 
-# Or run just the API backend
-uvicorn server.main:app --reload --port 8000
-
-# Docker
-docker build -t sre-env .
-docker run -p 7860:7860 sre-env
+# In another terminal, run tests
+pytest tests/test_env.py -v
 ```
 
-### Run Baseline Agent (Programmatic)
+**Docker**
 
 ```bash
+# Build image
+docker build -t sre-triage .
+
+# Run container
+docker run -p 7860:7860 sre-triage
+
+# Test endpoint
+curl http://localhost:7860/health
+```
+
+**Running Inference**
+
+```bash
+# Set environment variables
 export API_BASE_URL="https://router.huggingface.co/v1"
 export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
-export HF_TOKEN="your-token"
+export HF_TOKEN="your-huggingface-token"
+
+# Run inference on a specific task
 export TASK_ID="task1"
+python inference.py
+
+# Or run all tasks
 python inference.py
 ```
 
-## Baseline scores
+## Baseline Performance
 
-| Model | Task 1 | Task 2 | Task 3 | Task 4 |
-|---|---|---|---|---|
-| Qwen2.5-72B-Instruct | 0.71 | 0.58 | 0.42 | 0.31 |
-| GPT-4o | 0.84 | 0.67 | 0.55 | 0.44 |
-| Random agent | 0.24 | 0.18 | 0.14 | 0.11 |
+The following scores were obtained using the baseline inference script with different models:
 
-## Validate
+| Model | Task 1 | Task 2 | Task 3 | Task 4 | Average |
+|-------|--------|--------|--------|--------|---------|
+| Qwen2.5-72B-Instruct | 0.71 | 0.58 | 0.42 | 0.31 | 0.51 |
+| GPT-4o | 0.84 | 0.67 | 0.55 | 0.44 | 0.63 |
+| Random agent | 0.24 | 0.18 | 0.14 | 0.11 | 0.17 |
+
+These scores demonstrate that the tasks have appropriate difficulty scaling and can differentiate between random behavior and model-based reasoning.
+
+## Validation
+
+The environment passes OpenEnv validation in Docker mode:
 
 ```bash
 pip install openenv-core
-openenv validate
+openenv validate .
 ```
 
-## 🎨 UI Features
+All required endpoints are implemented and conform to the OpenEnv specification.
 
-The Gradio interface provides:
+## Development
 
-- **Interactive Playground:** Execute actions manually and see immediate feedback
-- **Visual Alerts:** Color-coded critical and warning alerts
-- **Terminal-style Logs:** Syntax-highlighted log viewer with timestamps
-- **Metric Dashboard:** Real-time metrics with anomaly detection
-- **Service Topology:** ASCII diagram of microservice dependencies
-- **Episode History:** Track all actions and rewards per step
-- **Leaderboard:** Compare scores across models and tasks
+**Running Tests**
 
-Perfect for:
-- 🎓 **Learning** SRE incident response patterns
-- 🤖 **Debugging** AI agent behavior
-- 🏆 **Competing** on the leaderboard
-- 📊 **Demoing** your model's capabilities
+```bash
+# Start the server
+uvicorn server.main:app --port 8000 &
 
----
-title: Sre Incident Triage
-emoji: 📈
-colorFrom: green
-colorTo: purple
-sdk: docker
-pinned: false
----
+# Run test suite
+pytest tests/test_env.py -v
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+# All 25 tests should pass
+```
+
+**Project Structure**
+
+```
+.
+├── server/
+│   ├── main.py              # FastAPI application and endpoints
+│   ├── engine.py            # Episode management and game logic
+│   ├── models.py            # Pydantic models for types
+│   ├── incident_generator.py # Procedural incident generation
+│   └── graders/
+│       └── grader.py        # Reward calculation and scoring
+├── tests/
+│   └── test_env.py          # Integration tests
+├── inference.py             # Baseline agent implementation
+├── openenv.yaml             # OpenEnv metadata
+├── Dockerfile               # Container configuration
+└── README.md                # This file
+```
+
+## License
+
+MIT
+
+## Citation
+
+If you use this environment in your research, please cite:
+
+```
+@misc{sre-incident-triage-2024,
+  title={SRE Incident Triage: An OpenEnv Benchmark for Production Incident Response},
+  author={Singh, Aditya},
+  year={2024},
+  url={https://huggingface.co/spaces/adityasingh-op/sre-incident-triage}
+}
+```
