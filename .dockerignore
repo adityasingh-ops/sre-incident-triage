@@ -1,0 +1,23 @@
+# Don't include these in the Docker build
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.git/
+.gitignore
+.gitattributes
+.pytest_cache/
+.env
+.env.local
+*.md
+!README.md
+tests/
+.copilot/
