@@ -64,8 +64,8 @@ def root():
 
 @app.get("/health")
 def health():
-    """Health check — used by HuggingFace Space ping."""
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    """Health check — OpenEnv compliant."""
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/reset", response_model=ResetResponse)
@@ -191,3 +191,30 @@ def list_tasks():
             },
         ]
     }
+
+
+# ── OpenEnv Standard Endpoints (optional but recommended) ────────────────────
+
+@app.get("/metadata")
+def metadata():
+    """Environment metadata for OpenEnv compliance."""
+    return {
+        "name": "SRE Incident Triage Environment",
+        "description": "OpenEnv-compliant benchmark for training AI agents on production incident response. "
+                      "Agents must investigate microservice failures, diagnose root causes, and submit remediation plans.",
+        "version": "1.0.0",
+        "author": "adityasingh-op",
+        "tags": ["sre", "devops", "incident-response", "production", "microservices"],
+    }
+
+
+@app.get("/schema")
+def schema():
+    """Return JSON schemas for action, observation, and state."""
+    from server.models import Action, Observation, EpisodeState
+    return {
+        "action": Action.model_json_schema(),
+        "observation": Observation.model_json_schema(),
+        "state": EpisodeState.model_json_schema(),
+    }
+
