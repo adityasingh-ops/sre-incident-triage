@@ -64,11 +64,12 @@ class Observation(BaseModel):
 # that finds it in 8 steps, which beats one that never finds it.
 
 class Reward(BaseModel):
-    total: float = 0.0             # Final 0.0–1.0 score
-    correctness: float = 0.0       # Did it identify root cause correctly?
-    efficiency: float = 0.0        # Did it take unnecessary actions?
-    speed: float = 0.0             # How fast relative to max steps?
-    partial_credit: float = 0.0    # Partial signal during episode
+    # Validator requires all scores strictly in (0, 1) - no exact 0.0 or 1.0
+    total: float = 0.001           # Final score strictly between 0 and 1
+    correctness: float = 0.001     # Did it identify root cause correctly?
+    efficiency: float = 0.001      # Did it take unnecessary actions?
+    speed: float = 0.001           # How fast relative to max steps?
+    partial_credit: float = 0.001  # Partial signal during episode
 
 
 # ─── Step Result ─────────────────────────────────────────────────────────────

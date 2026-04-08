@@ -91,7 +91,7 @@ class Grader:
             correctness=correctness,
             efficiency=efficiency,
             speed=speed,
-            partial_credit=0.0,
+            partial_credit=0.001,  # Must be > 0.0 for validator
         )
 
     def partial_reward(self, action_type: str, action_result: Dict[str, Any], incident: Dict[str, Any]) -> float:
