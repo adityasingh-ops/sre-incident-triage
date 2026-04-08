@@ -65,11 +65,12 @@ class Observation(BaseModel):
 
 class Reward(BaseModel):
     # Validator requires all scores strictly in (0, 1) - no exact 0.0 or 1.0
-    total: float = 0.001           # Final score strictly between 0 and 1
-    correctness: float = 0.001     # Did it identify root cause correctly?
-    efficiency: float = 0.001      # Did it take unnecessary actions?
-    speed: float = 0.001           # How fast relative to max steps?
-    partial_credit: float = 0.001  # Partial signal during episode
+    # Using 1e-6 as the epsilon value per official guidance
+    total: float = 1e-6           # Final score strictly between 0 and 1
+    correctness: float = 1e-6     # Did it identify root cause correctly?
+    efficiency: float = 1e-6      # Did it take unnecessary actions?
+    speed: float = 1e-6           # How fast relative to max steps?
+    partial_credit: float = 1e-6  # Partial signal during episode
 
 
 # ─── Step Result ─────────────────────────────────────────────────────────────
