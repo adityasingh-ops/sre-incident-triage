@@ -82,8 +82,12 @@ class Grader:
             4
         )
 
+        # Clamp to strictly between 0 and 1 (exclusive)
+        # Competition validator requires: 0.0 < score < 1.0
+        total = max(0.001, min(total, 0.999))
+
         return Reward(
-            total=min(total, 1.0),
+            total=total,
             correctness=correctness,
             efficiency=efficiency,
             speed=speed,
@@ -152,7 +156,9 @@ class Grader:
         elif submitted_service in true_service.lower() or true_service.lower() in submitted_service:
             score += 0.2  # Partial credit for close match
 
-        return round(min(score, 1.0), 4)
+        # Clamp to (0, 1) exclusive
+        score = max(0.001, min(score, 0.999))
+        return round(score, 4)
 
     def _score_efficiency(self, actions_taken: List[str], task_id: str, steps_taken: int) -> float:
         """
@@ -170,20 +176,25 @@ class Grader:
         extra   = max(0, steps_taken - minimum)
         step_penalty = extra * 0.05
 
-        score = max(0.0, 1.0 - penalty - step_penalty)
+        score = 1.0 - penalty - step_penalty
+        # Clamp to (0, 1) exclusive
+        score = max(0.001, min(score, 0.999))
         return round(score, 4)
 
     def _score_speed(self, steps_taken: int, max_steps: int) -> float:
         """
         Score based on how quickly the agent solved the task.
-        1.0 = solved in half the allowed steps or fewer.
-        0.0 = used all steps.
+        0.999 = solved in half the allowed steps or fewer.
+        0.001 = used all steps.
         """
         if steps_taken == 0:
-            return 0.0
+            return 0.001
         ratio = steps_taken / max_steps
         if ratio <= 0.5:
-            return 1.0
-        # Linear decay from 1.0 at 50% steps to 0.0 at 100% steps
-        score = 1.0 - ((ratio - 0.5) / 0.5)
-        return round(max(0.0, score), 4)
+            score = 0.999  # Changed from 1.0
+        else:
+            # Linear decay from 0.999 at 50% steps to 0.001 at 100% steps
+            score = 0.999 - ((ratio - 0.5) / 0.5) * 0.998
+        # Clamp to (0, 1) exclusive
+        score = max(0.001, min(score, 0.999))
+        return round(score, 4)
