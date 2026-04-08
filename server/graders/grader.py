@@ -82,17 +82,19 @@ class Grader:
 
         total = 0.50 * correctness + 0.30 * efficiency + 0.20 * speed
         
-        # Clamp ALL scores to strictly (0, 1) exclusive
-        total = clamp_score(total)
-        correctness = clamp_score(correctness)
-        efficiency = clamp_score(efficiency)
-        speed = clamp_score(speed)
+        # FIX: Round FIRST, then clamp.
+        # round(1 - 1e-6, 4) == 1.0, which would fail validation.
+        # By clamping AFTER rounding, we guarantee the final value is never exactly 0.0 or 1.0.
+        total       = clamp_score(round(total, 4))
+        correctness = clamp_score(round(correctness, 4))
+        efficiency  = clamp_score(round(efficiency, 4))
+        speed       = clamp_score(round(speed, 4))
 
         return Reward(
-            total=round(total, 4),
-            correctness=round(correctness, 4),
-            efficiency=round(efficiency, 4),
-            speed=round(speed, 4),
+            total=total,
+            correctness=correctness,
+            efficiency=efficiency,
+            speed=speed,
             partial_credit=clamp_score(0.001),
         )
 
