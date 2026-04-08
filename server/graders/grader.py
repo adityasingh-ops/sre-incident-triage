@@ -126,7 +126,8 @@ class Grader:
             else:
                 return -0.05  # Penalise wrong rollback
 
-        return 0.0
+        # Tiny reward instead of exactly 0.0 (validator requirement)
+        return 0.001
 
     # ── Private ───────────────────────────────────────────────────────────────
 

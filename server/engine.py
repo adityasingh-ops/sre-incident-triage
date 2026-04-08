@@ -76,7 +76,8 @@ class EpisodeEngine:
 
         if not handler:
             obs = self._base_obs(error=f"Unknown action: {action.action_type}")
-            return StepResult(observation=obs, reward=0.0, done=False)
+            # Use 0.001 instead of 0.0 (validator requires strictly > 0)
+            return StepResult(observation=obs, reward=0.001, done=False)
 
         obs, partial, done = handler(action.params)
 
@@ -87,7 +88,8 @@ class EpisodeEngine:
             partial -= 0.1  # Small penalty for running out of steps
 
         self.state.done = done
-        reward = round(max(0.0, min(partial, 1.0)), 4)
+        # Clamp to (0.001, 0.999) to satisfy validator requirement: 0 < score < 1
+        reward = round(max(0.001, min(partial, 0.999)), 4)
 
         return StepResult(
             observation=obs,
@@ -113,7 +115,8 @@ class EpisodeEngine:
         if service not in all_logs:
             services_available = list(all_logs.keys())
             obs = self._base_obs(error=f"Unknown service '{service}'. Available: {services_available}")
-            return obs, 0.0, False
+            # Use 0.001 instead of 0.0 (validator requires strictly > 0)
+            return obs, 0.001, False
 
         # Return only logs from the requested time window
         cutoff_minute = 20 - minutes
@@ -135,14 +138,16 @@ class EpisodeEngine:
 
         if service not in all_metrics:
             obs = self._base_obs(error=f"Unknown service '{service}'.")
-            return obs, 0.0, False
+            # Use 0.001 instead of 0.0 (validator requires strictly > 0)
+            return obs, 0.001, False
 
         svc_metrics = all_metrics[service]
         if metric_name and metric_name not in svc_metrics:
             obs = self._base_obs(
                 error=f"Unknown metric '{metric_name}'. Available: {list(svc_metrics.keys())}"
             )
-            return obs, 0.0, False
+            # Use 0.001 instead of 0.0 (validator requires strictly > 0)
+            return obs, 0.001, False
 
         # Return one metric or all metrics for the service
         result = {metric_name: svc_metrics[metric_name]} if metric_name else svc_metrics
@@ -174,7 +179,8 @@ class EpisodeEngine:
 
         if name not in playbooks:
             obs = self._base_obs(error=f"Unknown playbook '{name}'. Available: {list(playbooks.keys())}")
-            return obs, 0.0, False
+            # Use 0.001 instead of 0.0 (validator requires strictly > 0)
+            return obs, 0.001, False
 
         result  = playbooks[name]
         obs     = self._base_obs(playbook_result=result, feedback=f"Playbook '{name}' executed: {result}")
@@ -194,8 +200,8 @@ class EpisodeEngine:
         message  = params.get("message", "")
         result   = f"Escalated as {severity}. On-call lead paged. Message: '{message}'"
         obs      = self._base_obs(escalation_result=result, feedback=result)
-        # No partial reward — escalating without diagnosing is wasteful
-        return obs, 0.0, False
+        # Small negative reward instead of 0.0 - escalating without diagnosing is wasteful
+        return obs, 0.001, False
 
     def _handle_submit_diagnosis(self, params: Dict) -> tuple:
         """Final action — grade the episode and close it."""
@@ -247,7 +253,8 @@ class EpisodeEngine:
 
     def _terminal_result(self, feedback: str) -> StepResult:
         obs = self._base_obs(feedback=feedback)
-        return StepResult(observation=obs, reward=0.0, done=True)
+        # Use 0.001 instead of 0.0 (validator requires strictly > 0)
+        return StepResult(observation=obs, reward=0.001, done=True)
 
     def _log_index(self, log_entry: Dict) -> int:
         """Approximate which minute slot a log belongs to (for time windowing)."""
